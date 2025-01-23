@@ -1,61 +1,134 @@
 #include <Wire.h>
 #include <Adafruit_PWMServoDriver.h>
 
+#define ST_FLAG_NOBUILTIN
+#include <SerialTerminal.hpp>
+
+maschinendeck::SerialTerminal *term;
+
 // called this way, it uses the default address 0x40
-Adafruit_PWMServoDriver pwm = Adafruit_PWMServoDriver();
+TwoWire twi = TwoWire();
+Adafruit_PWMServoDriver pwm = Adafruit_PWMServoDriver(PCA9685_I2C_ADDRESS, twi);
 
 #define SERVO_FREQ 50 // Analog servos run at ~50 Hz updates
 
+#define SERVOMIN 102 // this is the 'minimum' pulse length count (out of 4096)
+#define SERVOMAX 350 // this is the 'maximum' pulse length count (out of 4096)
+#define SERVOMIN_S "102" // this is the 'minimum' pulse length count (out of 4096)
+#define SERVOMAX_S "350" // this is the 'maximum' pulse length count (out of 4096)
+
 uint8_t servonum = 0; // address of servo to be calibrated
 String readString;
-int pos;
+int pos = ((SERVOMAX - SERVOMIN) / 2) + SERVOMIN;
+bool power = false;
+int powerDelay = 100;
+uint8_t outputBuffer[5];
 
-void setup() {
-  Serial.begin(9600);
-  pos=1500; // Initial position
+void setPosition(int newpos)
+{
+  pos = min(max(newpos, SERVOMIN), SERVOMAX);
+  pwm.setPin(servonum, pos);
+  Serial.println("now at " + String(pos));
+  if(!power){
+    delay(powerDelay);
+    pwm.setPWM(servonum, 0, 4096);
+
+    Serial.println("Powered off after " + String(powerDelay) + "ms");
+  }
+}
+
+void reset(String opts)
+{
+  setPosition((SERVOMAX - SERVOMIN) / 2 + SERVOMIN);
+}
+
+void addValue(String opts)
+{
+  maschinendeck::Pair<String, String> operands = maschinendeck::SerialTerminal::ParseCommand(opts);
+  setPosition(pos + operands.first().toInt());
+}
+
+void subValue(String opts)
+{
+  maschinendeck::Pair<String, String> operands = maschinendeck::SerialTerminal::ParseCommand(opts);
+  setPosition(pos - operands.first().toInt());
+
+}
+
+void setValue(String opts)
+{
+  maschinendeck::Pair<String, String> operands = maschinendeck::SerialTerminal::ParseCommand(opts);
+  setPosition(operands.first().toInt());
+}
+
+void setPower(String opts)
+{
+  maschinendeck::Pair<String, String> operands = maschinendeck::SerialTerminal::ParseCommand(opts);
+  power = operands.first().toInt();
+  if(power){
+    Serial.println("Power on");
+    
+  } else {
+    Serial.println("Power off");
+  }
+}
+
+void setPowerDelay(String opts)
+{
+  maschinendeck::Pair<String, String> operands = maschinendeck::SerialTerminal::ParseCommand(opts);
+  powerDelay = operands.first().toInt();
+  Serial.println("Power delay set to " + String(powerDelay));
+ 
+}
+
+void setServo(String opts)
+{
+  maschinendeck::Pair<String, String> operands = maschinendeck::SerialTerminal::ParseCommand(opts);
+  servonum = operands.first().toInt();
+  if(servonum > 15){
+    servonum = 15;
+  }
+  Serial.println("Servo set to " + String(servonum));
+  setPosition(pos);
+}
+
+void setup()
+{
+  // Serial.begin(115200);
+  term = new maschinendeck::SerialTerminal(115200);
+  term->add("r", &reset, "reset the servo driver");
+  term->add("s", &setServo, "set servo port [0-15]");
+  term->add("+", &addValue, "add to servo driver");
+  term->add("-", &subValue, "sub from servo driver");
+  term->add("x", &setValue, "set value to servo driver");
+  term->add("p", &setPower, "set power [0/1] after movement");
+  term->add("d", &setPowerDelay, "set power delay in ms");
+  
   pwm.begin();
-  pwm.setOscillatorFrequency(25000000);
-  pwm.setPWMFreq(SERVO_FREQ);  // Analog servos run at ~50 Hz updates
+  pwm.setOscillatorFrequency(FREQUENCY_OSCILLATOR);
+  pwm.setPWMFreq(SERVO_FREQ); // Analog servos run at ~50 Hz updates
+  setPosition(pos);
 
-  Serial.println("Servo calibration");
-  Serial.println("Use this to calibrate your servo to find the range of movement required");
-  Serial.println("The servo should start close to the centre of the range");
-  Serial.println("Type a value followed by a + to move in one direction or a valu followed by a - to move in the other direction");
-  Serial.println("For example 100+ to 200-");  
-  Serial.println("To move to a specific location use strings like 900x or 1800x for new servo position");
-  Serial.println("Move the servo to find the required range for whatever you're operating.");
-  Serial.println("Servos min and max can vary, try the 1000 - 2000 range to start with.");
-  Serial.println("WARNING: Exceeding the max range could damage the servo.");
-  Serial.println();
-  pwm.writeMicroseconds(servonum, pos);
-  Serial.println("Centre point:");  
-  Serial.println(pos);  
+  // Serial.println("Servo calibration");
+  // Serial.println("Use this to calibrate your servo to find the range of movement required");
+  // Serial.println("The servo should start close to the centre of the range");
+  // Serial.println("Type \"+\" or \"-\" then a value to move the servo in that direction");
+  // Serial.println("For example \"+ 10\" or \"- 20\"");
+  // Serial.println("To move to a specific location use strings like \"x 200\" or \"x 210\" for new servo position");
+  // Serial.println("Type \"reset\" to reset the servo to the centre point");
+  // Serial.println("Move the servo to find the required range for whatever you're operating.");
+  // Serial.println("Servos min and max can vary, try the " SERVOMIN_S " to " SERVOMAX_S " range to start with.");
+  // Serial.println("WARNING: Exceeding the max range could damage the servo.");
+  // Serial.println();
+  
+  Serial.println("Centre point:");
+  Serial.println(pos);
   delay(10);
 }
 
 void loop()
 {
-  while (Serial.available()) {
-    char c = Serial.read();  //gets one byte from serial buffer
-    readString += c; //makes the string readString
-    delay(2);  //slow looping to allow buffer to fill with next character
-  }
-  if (readString.length() >0) {
-
-    if(readString.indexOf('x') >0) {
-      pos = readString.toInt();
-    }
-
-    if(readString.indexOf('+') >0) {
-      pos = pos + readString.toInt();
-    }
-
-    if(readString.indexOf('-') >0) {
-      pos = pos - readString.toInt();
-    }
-
-    pwm.writeMicroseconds(servonum, pos);
-    Serial.println(pos);
-    readString=""; //empty for next input
-  }
+  term->loop();
+  delay(2);
 }
+

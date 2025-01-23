@@ -1,3 +1,7 @@
 # ServoControl
-Contains files for use with the YouTube tutorials.
-Visit https://www.youtube.com/watch?v=fHAPXAcW9ZQ to see the step by step guide.
+
+* Makes more usefull with proper serial input
+* Uses the actual pwm values, set with min/max for TT:120 turnouts.
+* Has turn-off after movement.
+* Change servo number.
+* Change delay after movement.
