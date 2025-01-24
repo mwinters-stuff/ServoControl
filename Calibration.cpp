@@ -18,21 +18,23 @@ Adafruit_PWMServoDriver pwm = Adafruit_PWMServoDriver(PCA9685_I2C_ADDRESS, twi);
 #define SERVOMIN_S "102" // this is the 'minimum' pulse length count (out of 4096)
 #define SERVOMAX_S "500" // this is the 'maximum' pulse length count (out of 4096)
 
+#define SERVO_COUNT 16
+
 uint8_t servonum = 0; // address of servo to be calibrated
 int pos = ((SERVOMAX - SERVOMIN) / 2) + SERVOMIN;
 bool power = false;
 int powerDelay = 100;
-int pos_open = 0;
-int pos_close = 0;
+int pos_open[SERVO_COUNT] = {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0};
+int pos_close[SERVO_COUNT] = {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0};
 
-void setPosition(int newpos)
+void setPosition(int servo, int newpos)
 {
   pos = min(max(newpos, SERVOMIN), SERVOMAX);
-  pwm.setPin(servonum, pos);
-  Serial.println("now at " + String(pos));
+  pwm.setPin(servo, pos);
+  Serial.println("servo " + String(servo) + " now at " + String(pos));
   if(!power){
     delay(powerDelay);
-    pwm.setPWM(servonum, 0, 4096);
+    pwm.setPWM(servo, 0, 4096);
 
     Serial.println("Powered off after " + String(powerDelay) + "ms");
   }
@@ -40,26 +42,26 @@ void setPosition(int newpos)
 
 void reset(String opts)
 {
-  setPosition((SERVOMAX - SERVOMIN) / 2 + SERVOMIN);
+  setPosition(servonum, (SERVOMAX - SERVOMIN) / 2 + SERVOMIN);
 }
 
 void addValue(String opts)
 {
   maschinendeck::Pair<String, String> operands = maschinendeck::SerialTerminal::ParseCommand(opts);
-  setPosition(pos + operands.first().toInt());
+  setPosition(servonum, pos + operands.first().toInt());
 }
 
 void subValue(String opts)
 {
   maschinendeck::Pair<String, String> operands = maschinendeck::SerialTerminal::ParseCommand(opts);
-  setPosition(pos - operands.first().toInt());
+  setPosition(servonum, pos - operands.first().toInt());
 
 }
 
 void setValue(String opts)
 {
   maschinendeck::Pair<String, String> operands = maschinendeck::SerialTerminal::ParseCommand(opts);
-  setPosition(operands.first().toInt());
+  setPosition(servonum, operands.first().toInt());
 }
 
 void setPower(String opts)
@@ -84,22 +86,34 @@ void setPowerDelay(String opts)
 
 void setServo(String opts)
 {
+  Serial.println("Servo calibration: " + opts);
   maschinendeck::Pair<String, String> operands = maschinendeck::SerialTerminal::ParseCommand(opts);
-  servonum = operands.first().toInt();
-  if(servonum > 15){
-    servonum = 15;
+  int servo = operands.first().toInt();
+  String openOrClose = operands.second();
+  if(servo < 0 || servo > 15){
+    servo = 15;
   }
-  Serial.println("Servo set to " + String(servonum));
+  if(openOrClose == "o"){
+    setPosition(servo, pos_open[servo]);
+    Serial.println("Servo " + String(servo) + " set to open position");
+
+  } else if(openOrClose == "c"){
+    setPosition(servo, pos_close[servo]);
+    Serial.println("Servo " + String(servo) + " set to closed position");
+  } else {
+    servonum = servo;
+    Serial.println("Servo set to " + String(servonum));
+  }
 }
 
 void setOpenPosition(String opts)
 {
   if(opts.length() > 0){
     maschinendeck::Pair<String, String> operands = maschinendeck::SerialTerminal::ParseCommand(opts);
-    pos_open = operands.first().toInt();
-    Serial.println("Open position set to " + String(pos_open));
-  } else if (pos_open > 0){
-    setPosition(pos_open);
+    pos_open[servonum] = operands.first().toInt();
+    Serial.println("Open position set to " + String(pos_open[servonum]));
+  } else if (pos_open[servonum] > 0){
+    setPosition(servonum, pos_open[servonum]);
     Serial.println("Open position set");
   }
  
@@ -110,10 +124,10 @@ void setClosePosition(String opts)
 {
   if(opts.length() > 0){
     maschinendeck::Pair<String, String> operands = maschinendeck::SerialTerminal::ParseCommand(opts);
-    pos_close = operands.first().toInt();
-    Serial.println("Close position set to " + String(pos_close));
-  } else if(pos_close > 0){
-    setPosition(pos_close);
+    pos_close[servonum] = operands.first().toInt();
+    Serial.println("Close position set to " + String(pos_close[servonum]));
+  } else if(pos_close[servonum] > 0){
+    setPosition(servonum, pos_close[servonum]);
     Serial.println("Close position set");
   }
  
@@ -123,8 +137,8 @@ void printPositions(String opts){
   Serial.println("Servo position calibration");
   Serial.println("Servo: " + String(servonum));
   Serial.println("Current position: " + String(pos));
-  Serial.println("Open position: " + String(pos_open));
-  Serial.println("Close position: " + String(pos_close));
+  Serial.println("Open position: " + String(pos_open[servonum]));
+  Serial.println("Close position: " + String(pos_close[servonum]));
   Serial.println("Power: " + String(power));
   Serial.println("Power delay: " + String(powerDelay));
 
@@ -135,7 +149,7 @@ void setup()
   // Serial.begin(115200);
   term = new maschinendeck::SerialTerminal(115200);
   term->add("r", &reset, "reset the servo driver");
-  term->add("s", &setServo, "set servo port [0-15]");
+  term->add("s", &setServo, "set servo port [0-15], or set open/closed [0-15] [o/c]");
   term->add("+", &addValue, "add to servo driver");
   term->add("-", &subValue, "sub from servo driver");
   term->add("x", &setValue, "set value to servo driver");
