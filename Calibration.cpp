@@ -14,16 +14,16 @@ Adafruit_PWMServoDriver pwm = Adafruit_PWMServoDriver(PCA9685_I2C_ADDRESS, twi);
 #define SERVO_FREQ 50 // Analog servos run at ~50 Hz updates
 
 #define SERVOMIN 102 // this is the 'minimum' pulse length count (out of 4096)
-#define SERVOMAX 350 // this is the 'maximum' pulse length count (out of 4096)
+#define SERVOMAX 500 // this is the 'maximum' pulse length count (out of 4096)
 #define SERVOMIN_S "102" // this is the 'minimum' pulse length count (out of 4096)
-#define SERVOMAX_S "350" // this is the 'maximum' pulse length count (out of 4096)
+#define SERVOMAX_S "500" // this is the 'maximum' pulse length count (out of 4096)
 
 uint8_t servonum = 0; // address of servo to be calibrated
-String readString;
 int pos = ((SERVOMAX - SERVOMIN) / 2) + SERVOMIN;
 bool power = false;
 int powerDelay = 100;
-uint8_t outputBuffer[5];
+int pos_open = 0;
+int pos_close = 0;
 
 void setPosition(int newpos)
 {
@@ -90,7 +90,44 @@ void setServo(String opts)
     servonum = 15;
   }
   Serial.println("Servo set to " + String(servonum));
-  setPosition(pos);
+}
+
+void setOpenPosition(String opts)
+{
+  if(opts.length() > 0){
+    maschinendeck::Pair<String, String> operands = maschinendeck::SerialTerminal::ParseCommand(opts);
+    pos_open = operands.first().toInt();
+    Serial.println("Open position set to " + String(pos_open));
+  } else if (pos_open > 0){
+    setPosition(pos_open);
+    Serial.println("Open position set");
+  }
+ 
+}
+
+
+void setClosePosition(String opts)
+{
+  if(opts.length() > 0){
+    maschinendeck::Pair<String, String> operands = maschinendeck::SerialTerminal::ParseCommand(opts);
+    pos_close = operands.first().toInt();
+    Serial.println("Close position set to " + String(pos_close));
+  } else if(pos_close > 0){
+    setPosition(pos_close);
+    Serial.println("Close position set");
+  }
+ 
+}
+
+void printPositions(String opts){
+  Serial.println("Servo position calibration");
+  Serial.println("Servo: " + String(servonum));
+  Serial.println("Current position: " + String(pos));
+  Serial.println("Open position: " + String(pos_open));
+  Serial.println("Close position: " + String(pos_close));
+  Serial.println("Power: " + String(power));
+  Serial.println("Power delay: " + String(powerDelay));
+
 }
 
 void setup()
@@ -104,23 +141,16 @@ void setup()
   term->add("x", &setValue, "set value to servo driver");
   term->add("p", &setPower, "set power [0/1] after movement");
   term->add("d", &setPowerDelay, "set power delay in ms");
+  term->add("o", &setOpenPosition, "set open position");
+  term->add("c", &setClosePosition, "set close position");
+  term->add("p", &printPositions, "print positions");
   
   pwm.begin();
   pwm.setOscillatorFrequency(FREQUENCY_OSCILLATOR);
   pwm.setPWMFreq(SERVO_FREQ); // Analog servos run at ~50 Hz updates
-  setPosition(pos);
 
-  // Serial.println("Servo calibration");
-  // Serial.println("Use this to calibrate your servo to find the range of movement required");
-  // Serial.println("The servo should start close to the centre of the range");
-  // Serial.println("Type \"+\" or \"-\" then a value to move the servo in that direction");
-  // Serial.println("For example \"+ 10\" or \"- 20\"");
-  // Serial.println("To move to a specific location use strings like \"x 200\" or \"x 210\" for new servo position");
-  // Serial.println("Type \"reset\" to reset the servo to the centre point");
-  // Serial.println("Move the servo to find the required range for whatever you're operating.");
-  // Serial.println("Servos min and max can vary, try the " SERVOMIN_S " to " SERVOMAX_S " range to start with.");
-  // Serial.println("WARNING: Exceeding the max range could damage the servo.");
-  // Serial.println();
+  Serial.println("Servo calibration");
+  Serial.println("Remember to set initial servo position with \"x 200\" or similar");
   
   Serial.println("Centre point:");
   Serial.println(pos);
