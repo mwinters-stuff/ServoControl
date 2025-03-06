@@ -157,7 +157,7 @@ void setup()
   term->add("d", &setPowerDelay, "set power delay in ms");
   term->add("o", &setOpenPosition, "set open position");
   term->add("c", &setClosePosition, "set close position");
-  term->add("p", &printPositions, "print positions");
+  term->add("t", &printPositions, "print positions");
   
   pwm.begin();
   pwm.setOscillatorFrequency(FREQUENCY_OSCILLATOR);
